@@ -1,0 +1,4 @@
+[submodule ".agent-kb"]
+	path = .agent-kb
+	url = https://gitee.com/SunHao-AI/agent.git
+	branch = master

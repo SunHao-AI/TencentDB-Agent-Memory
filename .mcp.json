@@ -1,0 +1,20 @@
+{
+  "mcpServers": {
+    "kb": {
+      "command": "../Agent-KB/.venv/Scripts/python.exe",
+      "args": [
+        "-m",
+        "kb.mcp",
+        "--repo",
+        "docs",
+        "--agent-kb",
+        ".agent-kb",
+        "--repo-name",
+        "tencentdb-agent-memory"
+      ],
+      "env": {
+        "KB_TRACE": "1"
+      }
+    }
+  }
+}
