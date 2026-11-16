@@ -12,7 +12,7 @@
  *   lib 层 cascadeDeleteWikiPagesWithRefs 做引用级联。
  */
 
-import { join, resolve, normalize, dirname } from "node:path";
+import { join, resolve, normalize, dirname, relative, sep, isAbsolute } from "node:path";
 import {
   rmSync,
   mkdirSync,
@@ -1137,9 +1137,18 @@ export class WikiService {
     // （如 KNOWLEDGE_DATA_DIR=./data）与 resolve 出来的绝对路径比较失败。
     const base = resolve(sourcesDir);
     const safe = resolve(base, normalized);
-    const dirWithSep = base.endsWith("/") ? base : base + "/";
-    if (safe !== base && !safe.startsWith(dirWithSep)) return null;
+    if (!this.isWithinDir(base, safe)) return null;
     return safe;
+  }
+
+  /**
+   * 目录包含判定（跨平台）：resolve() 在 Windows 上返回 `\` 分隔路径，
+   * 用 path.relative 比较而非硬编码 "/" 前缀，否则 Windows 下全部误判为穿越。
+   */
+  private isWithinDir(base: string, target: string): boolean {
+    const rel = relative(resolve(base), resolve(target));
+    if (rel === "") return true;
+    return rel !== ".." && !rel.startsWith(".." + sep) && !isAbsolute(rel);
   }
 
   /**
@@ -1158,13 +1167,12 @@ export class WikiService {
 
     // resolve 成绝对路径，避免 projectPath 是相对路径时比较失败。
     const wikiDir = resolve(projectPath, "wiki");
-    const wikiDirSep = wikiDir.endsWith("/") ? wikiDir : wikiDir + "/";
 
     // 先按原样尝试，再尝试补 .md 扩展。
     const candidates = cleanRef.endsWith(".md") ? [cleanRef] : [cleanRef + ".md", cleanRef];
     for (const c of candidates) {
       const safe = resolve(wikiDir, c);
-      if (safe !== wikiDir && !safe.startsWith(wikiDirSep)) continue;
+      if (safe !== wikiDir && !this.isWithinDir(wikiDir, safe)) continue;
       if (opts.allowMissing) {
         // write 路径补 .md：允许任何其中一个
         return c.endsWith(".md") ? safe : null;
@@ -1174,7 +1182,7 @@ export class WikiService {
     if (opts.allowMissing) {
       // 没匹配 .md 候选时，强制补 .md
       const safe = resolve(wikiDir, cleanRef.endsWith(".md") ? cleanRef : cleanRef + ".md");
-      if (safe === wikiDir || !safe.startsWith(wikiDirSep)) return null;
+      if (safe === wikiDir || !this.isWithinDir(wikiDir, safe)) return null;
       return safe;
     }
     return null;
@@ -1183,9 +1191,9 @@ export class WikiService {
   /** 把 wiki/.../page.md 绝对路径转换回 ref（如 "concepts/redis"）。 */
   private absToPageRef(projectPath: string, abs: string): string {
     const wikiDir = resolve(projectPath, "wiki");
-    const prefix = wikiDir.endsWith("/") ? wikiDir : wikiDir + "/";
-    if (!abs.startsWith(prefix)) return abs;
-    return abs.slice(prefix.length).replace(/\.md$/, "");
+    const rel = relative(wikiDir, resolve(abs));
+    if (rel === "" || rel.startsWith(".." + sep) || isAbsolute(rel)) return abs;
+    return rel.replace(/\.md$/, "").split(sep).join("/");
   }
 
   private isForbiddenPageRef(ref: string): boolean {
